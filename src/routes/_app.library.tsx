@@ -8,6 +8,7 @@ import { Play, Shuffle, Cloud, CloudOff } from "lucide-react";
 import { AuthSheet } from "@/components/auth/AuthSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/_app/library")({
   head: () => ({
@@ -43,14 +44,27 @@ function LibraryPage() {
       />
 
       {user ? (
-        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-border bg-card/30 px-4 py-3.5 backdrop-blur-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-brand animate-pulse">
-              <Cloud className="h-4 w-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-foreground">Cloud Sync Active</span>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">{user.email}</span>
+        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-border bg-card/30 p-4 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 border border-border/40 shadow-inner">
+              <AvatarImage 
+                src={user.user_metadata?.avatar_url || ""} 
+                alt={user.user_metadata?.full_name || "User Profile"} 
+              />
+              <AvatarFallback className="bg-brand/10 text-brand text-xs font-semibold">
+                {(user.user_metadata?.full_name || user.email || "U").slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-semibold text-foreground truncate">
+                {user.user_metadata?.full_name || "Musio Listener"}
+              </span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                {user.email}
+              </span>
+              <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded bg-brand/10 px-1 py-0.5 text-[8px] font-medium text-brand">
+                <span className="h-1 w-1 rounded-full bg-brand animate-pulse" /> Cloud Backup Active
+              </span>
             </div>
           </div>
           <button

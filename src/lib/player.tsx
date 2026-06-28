@@ -129,7 +129,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (tickRef.current) window.clearInterval(tickRef.current);
     };
   }, [playing]);
-
   const playTrack = useCallback(
     (t: Track, opts?: { queue?: Track[] }) => {
       setCurrent((prev) => {
@@ -238,6 +237,64 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearQueue = useCallback(() => setQueue([]), []);
+
+  // Sync Media Session metadata for lockscreen and background play controls
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    if (current) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: current.title,
+        artist: current.channel,
+        album: "Musio",
+        artwork: [
+          {
+            src: current.thumbnail,
+            sizes: "512x512",
+            type: "image/jpeg",
+          },
+        ],
+      });
+    } else {
+      navigator.mediaSession.metadata = null;
+    }
+  }, [current]);
+
+  // Sync Media Session playback state (playing/paused)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+  }, [playing]);
+
+  // Register Media Session hardware/system control action handlers
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    try {
+      navigator.mediaSession.setActionHandler("play", togglePlay);
+      navigator.mediaSession.setActionHandler("pause", togglePlay);
+      navigator.mediaSession.setActionHandler("nexttrack", advance);
+      navigator.mediaSession.setActionHandler("previoustrack", previous);
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        if (details.seekTime !== undefined) {
+          seek(details.seekTime);
+        }
+      });
+    } catch (e) {
+      console.warn("Media Session Action Handlers registration failed:", e);
+    }
+
+    return () => {
+      if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+      try {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("nexttrack", null);
+        navigator.mediaSession.setActionHandler("previoustrack", null);
+        navigator.mediaSession.setActionHandler("seekto", null);
+      } catch {}
+    };
+  }, [togglePlay, advance, previous, seek]);
 
   const value: PlayerCtx = {
     current,

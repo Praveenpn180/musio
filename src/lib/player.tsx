@@ -1,0 +1,297 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { Track } from "./library-store";
+import { useLibrary } from "./library-store";
+
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
+type PlayerCtx = {
+  current: Track | null;
+  queue: Track[]; // upcoming after current
+  history: Track[];
+  playing: boolean;
+  ready: boolean;
+  position: number;
+  duration: number;
+  volume: number;
+  showNowPlaying: boolean;
+  setShowNowPlaying: (v: boolean) => void;
+  playTrack: (t: Track, opts?: { queue?: Track[] }) => void;
+  togglePlay: () => void;
+  next: () => void;
+  previous: () => void;
+  seek: (sec: number) => void;
+  setVolume: (v: number) => void;
+  addToQueue: (t: Track) => void;
+  removeFromQueue: (id: string) => void;
+  clearQueue: () => void;
+};
+
+const Ctx = createContext<PlayerCtx | null>(null);
+
+let apiPromise: Promise<void> | null = null;
+function loadYTApi(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.YT?.Player) return Promise.resolve();
+  if (apiPromise) return apiPromise;
+  apiPromise = new Promise((resolve) => {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      prev?.();
+      resolve();
+    };
+  });
+  return apiPromise;
+}
+
+export function PlayerProvider({ children }: { children: ReactNode }) {
+  const { pushRecent } = useLibrary();
+  const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tickRef = useRef<number | null>(null);
+
+  const [current, setCurrent] = useState<Track | null>(null);
+  const [queue, setQueue] = useState<Track[]>([]);
+  const [history, setHistory] = useState<Track[]>([]);
+  const [playing, setPlaying] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolumeState] = useState(80);
+  const [showNowPlaying, setShowNowPlaying] = useState(false);
+
+  // init the iframe player once
+  useEffect(() => {
+    let cancelled = false;
+    loadYTApi().then(() => {
+      if (cancelled || !containerRef.current) return;
+      playerRef.current = new window.YT.Player(containerRef.current, {
+        height: "1",
+        width: "1",
+        playerVars: { autoplay: 0, controls: 0, modestbranding: 1, playsinline: 1, rel: 0 },
+        events: {
+          onReady: () => {
+            setReady(true);
+            playerRef.current?.setVolume(volume);
+          },
+          onStateChange: (e: any) => {
+            const YTState = window.YT.PlayerState;
+            if (e.data === YTState.PLAYING) setPlaying(true);
+            else if (e.data === YTState.PAUSED) setPlaying(false);
+            else if (e.data === YTState.ENDED) {
+              setPlaying(false);
+              advance();
+            }
+          },
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+      try {
+        playerRef.current?.destroy?.();
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // tick progress
+  useEffect(() => {
+    if (!playing) {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+      tickRef.current = null;
+      return;
+    }
+    tickRef.current = window.setInterval(() => {
+      try {
+        const p = playerRef.current?.getCurrentTime?.() ?? 0;
+        const d = playerRef.current?.getDuration?.() ?? 0;
+        setPosition(p);
+        setDuration(d);
+      } catch {}
+    }, 500);
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
+  }, [playing]);
+
+  const playTrack = useCallback(
+    (t: Track, opts?: { queue?: Track[] }) => {
+      setCurrent((prev) => {
+        if (prev) setHistory((h) => [prev, ...h].slice(0, 50));
+        return t;
+      });
+      if (opts?.queue) setQueue(opts.queue.filter((x) => x.id !== t.id));
+      pushRecent(t);
+      const start = () => {
+        try {
+          playerRef.current?.loadVideoById?.(t.id);
+          playerRef.current?.setVolume?.(volume);
+          playerRef.current?.playVideo?.();
+        } catch {}
+      };
+      if (ready) start();
+      else {
+        const tryUntilReady = setInterval(() => {
+          if (playerRef.current?.loadVideoById) {
+            clearInterval(tryUntilReady);
+            start();
+          }
+        }, 200);
+        setTimeout(() => clearInterval(tryUntilReady), 8000);
+      }
+    },
+    [pushRecent, ready, volume],
+  );
+
+  const togglePlay = useCallback(() => {
+    if (!current) return;
+    try {
+      if (playing) playerRef.current?.pauseVideo?.();
+      else playerRef.current?.playVideo?.();
+    } catch {}
+  }, [current, playing]);
+
+  const advance = useCallback(() => {
+    setQueue((q) => {
+      if (q.length === 0) {
+        setCurrent((c) => {
+          if (c) setHistory((h) => [c, ...h].slice(0, 50));
+          return null;
+        });
+        try {
+          playerRef.current?.stopVideo?.();
+        } catch {}
+        return q;
+      }
+      const [next_, ...rest] = q;
+      setCurrent((c) => {
+        if (c) setHistory((h) => [c, ...h].slice(0, 50));
+        return next_;
+      });
+      pushRecent(next_);
+      try {
+        playerRef.current?.loadVideoById?.(next_.id);
+        playerRef.current?.playVideo?.();
+      } catch {}
+      return rest;
+    });
+  }, [pushRecent]);
+
+  const previous = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) {
+        try {
+          playerRef.current?.seekTo?.(0, true);
+        } catch {}
+        return h;
+      }
+      const [prev, ...rest] = h;
+      setCurrent((c) => {
+        if (c) setQueue((q) => [c, ...q]);
+        return prev;
+      });
+      pushRecent(prev);
+      try {
+        playerRef.current?.loadVideoById?.(prev.id);
+        playerRef.current?.playVideo?.();
+      } catch {}
+      return rest;
+    });
+  }, [pushRecent]);
+
+  const seek = useCallback((sec: number) => {
+    try {
+      playerRef.current?.seekTo?.(sec, true);
+      setPosition(sec);
+    } catch {}
+  }, []);
+
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    try {
+      playerRef.current?.setVolume?.(v);
+    } catch {}
+  }, []);
+
+  const addToQueue = useCallback((t: Track) => {
+    setQueue((q) => (q.find((x) => x.id === t.id) ? q : [...q, t]));
+  }, []);
+
+  const removeFromQueue = useCallback((id: string) => {
+    setQueue((q) => q.filter((t) => t.id !== id));
+  }, []);
+
+  const clearQueue = useCallback(() => setQueue([]), []);
+
+  const value: PlayerCtx = {
+    current,
+    queue,
+    history,
+    playing,
+    ready,
+    position,
+    duration,
+    volume,
+    showNowPlaying,
+    setShowNowPlaying,
+    playTrack,
+    togglePlay,
+    next: advance,
+    previous,
+    seek,
+    setVolume,
+    addToQueue,
+    removeFromQueue,
+    clearQueue,
+  };
+
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {/* Hidden YouTube player */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          left: -9999,
+          top: -9999,
+          width: 1,
+          height: 1,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      >
+        <div ref={containerRef} />
+      </div>
+    </Ctx.Provider>
+  );
+}
+
+export function usePlayer() {
+  const c = useContext(Ctx);
+  if (!c) throw new Error("usePlayer must be used within PlayerProvider");
+  return c;
+}
+
+export function formatTime(sec: number): string {
+  if (!sec || !isFinite(sec)) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}

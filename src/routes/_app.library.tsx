@@ -4,12 +4,15 @@ import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
-import { Play, Shuffle } from "lucide-react";
+import { Play, Shuffle, Cloud, CloudOff } from "lucide-react";
+import { AuthSheet } from "@/components/auth/AuthSheet";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/library")({
   head: () => ({
     meta: [
-      { title: "Library — Sonance" },
+      { title: "Library — Musio" },
       { name: "description", content: "Every track you've saved." },
     ],
   }),
@@ -17,9 +20,10 @@ export const Route = createFileRoute("/_app/library")({
 });
 
 function LibraryPage() {
-  const { state } = useLibrary();
+  const { state, user } = useLibrary();
   const { playTrack } = usePlayer();
   const [q, setQ] = useState("");
+  const [authOpen, setAuthOpen] = useState(false);
 
   const tracks = useMemo(() => {
     const list = Object.values(state.saved).sort((a, b) => a.title.localeCompare(b.title));
@@ -37,6 +41,50 @@ function LibraryPage() {
         title="Library"
         subtitle={`${Object.keys(state.saved).length} saved tracks`}
       />
+
+      {user ? (
+        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-border bg-card/30 px-4 py-3.5 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-brand animate-pulse">
+              <Cloud className="h-4 w-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-foreground">Cloud Sync Active</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">{user.email}</span>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              const { error } = await supabase.auth.signOut();
+              if (error) toast.error(error.message);
+              else toast.success("Signed out successfully!");
+            }}
+            className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] font-semibold hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            Sign Out
+          </button>
+        </div>
+      ) : (
+        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
+              <CloudOff className="h-4 w-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-foreground">Cloud Backup Disabled</span>
+              <span className="text-[10px] text-muted-foreground">Sign in to save playlists & tracks</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setAuthOpen(true)}
+            className="rounded-full bg-brand px-4 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-[0_4px_12px_var(--color-brand-glow)] hover:bg-brand/90 active:scale-95 transition-all cursor-pointer"
+          >
+            Connect
+          </button>
+        </div>
+      )}
+
+      <AuthSheet open={authOpen} onOpenChange={setAuthOpen} />
 
       {tracks.length > 0 && (
         <div className="flex items-center gap-2 px-5">

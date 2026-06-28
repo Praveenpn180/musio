@@ -8,7 +8,7 @@ import { usePlayer } from "@/lib/player";
 
 export const Route = createFileRoute("/_app/playlists/$id")({
   head: () => ({
-    meta: [{ title: "Playlist — Sonance" }],
+    meta: [{ title: "Playlist — Musio" }],
   }),
   component: PlaylistDetail,
 });

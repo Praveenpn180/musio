@@ -7,7 +7,7 @@ import { useLibrary } from "@/lib/library-store";
 export const Route = createFileRoute("/_app/playlists/")({
   head: () => ({
     meta: [
-      { title: "Playlists — Sonance" },
+      { title: "Playlists — Musio" },
       { name: "description", content: "Curate your own playlists." },
     ],
   }),

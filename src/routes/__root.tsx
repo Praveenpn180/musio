@@ -80,14 +80,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#070708" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { name: "apple-mobile-web-app-title", content: "Sonance" },
-      { title: "Sonance — Personal Music Player" },
+      { name: "apple-mobile-web-app-title", content: "Musio" },
+      { title: "Musio — Personal Music Player" },
       {
         name: "description",
         content:
-          "Sonance is a clean, mobile-first music player. Search YouTube, save your library, build playlists, and play it all in a beautiful custom interface.",
+          "Musio is a clean, mobile-first music player. Search YouTube, save your library, build playlists, and play it all in a beautiful custom interface.",
       },
-      { property: "og:title", content: "Sonance — Personal Music Player" },
+      { property: "og:title", content: "Musio — Personal Music Player" },
       {
         property: "og:description",
         content: "Search, save and play music from YouTube in a beautiful custom player.",

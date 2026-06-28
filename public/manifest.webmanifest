@@ -1,6 +1,6 @@
 {
-  "name": "Sonance — Music Player",
-  "short_name": "Sonance",
+  "name": "Musio — Music Player",
+  "short_name": "Musio",
   "description": "Personal music player powered by YouTube.",
   "start_url": "/",
   "scope": "/",

@@ -8,7 +8,7 @@ import { usePlayer } from "@/lib/player";
 export const Route = createFileRoute("/_app/")({
   head: () => ({
     meta: [
-      { title: "Sonance — Home" },
+      { title: "Musio — Home" },
       { name: "description", content: "Your personal music dashboard." },
     ],
   }),
@@ -30,7 +30,7 @@ function Home() {
 
   return (
     <Screen>
-      <ScreenHeader eyebrow="Sonance" title={greeting} subtitle="Your personal soundtrack." />
+      <ScreenHeader eyebrow="Musio" title={greeting} subtitle="Your personal soundtrack." />
 
       {/* Quick tiles */}
       <section className="px-5">

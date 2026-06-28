@@ -11,7 +11,7 @@ import { usePlayer } from "@/lib/player";
 export const Route = createFileRoute("/_app/search")({
   head: () => ({
     meta: [
-      { title: "Search — Sonance" },
+      { title: "Search — Musio" },
       { name: "description", content: "Search YouTube and play any track." },
     ],
   }),

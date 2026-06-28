@@ -191,3 +191,93 @@ export const searchYouTube = createServerFn({ method: "GET" })
     // Fallback: Run HTML scraper if API key is not present or query failed
     return searchWithScraper(data.query);
   });
+
+export const getRecommendations = createServerFn({ method: "GET" })
+  .inputValidator((data) =>
+    z
+      .object({
+        videoId: z.string().optional(),
+        title: z.string().optional(),
+        channel: z.string().optional(),
+      })
+      .parse(data)
+  )
+  .handler(async ({ data }): Promise<YTTrack[]> => {
+    const apiKey = process.env.YOUTUBE_DATA_API_KEY;
+    let query = "Pop Music Hits";
+    if (data.title && data.channel) {
+      const cleanTitle = data.title
+        .replace(/\(Official.*?\)/gi, "")
+        .replace(/\[Official.*?\]/gi, "")
+        .replace(/\(Remastered.*?\)/gi, "")
+        .replace(/\(Video.*?\)/gi, "")
+        .replace(/\(Lyric.*?\)/gi, "")
+        .trim();
+      query = `${data.channel} ${cleanTitle} radio`;
+    }
+
+    try {
+      if (apiKey) {
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+          query
+        )}&type=video&maxResults=15&key=${apiKey}`;
+
+        const searchRes = await fetch(searchUrl);
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const items = searchData.items ?? [];
+          if (items.length > 0) {
+            const videoIds = items.map((item: any) => item.id.videoId).filter(Boolean);
+            if (videoIds.length > 0) {
+              const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds.join(
+                ","
+              )}&key=${apiKey}`;
+              const videosRes = await fetch(videosUrl);
+              if (videosRes.ok) {
+                const videosData = await videosRes.json();
+                const videoDetails = videosData.items ?? [];
+                const durationMap: Record<string, number> = {};
+                for (const details of videoDetails) {
+                  const isoDuration = details.contentDetails?.duration;
+                  if (isoDuration) {
+                    durationMap[details.id] = parseISODuration(isoDuration);
+                  }
+                }
+
+                const results: YTTrack[] = [];
+                for (const item of items) {
+                  const videoId = item.id?.videoId;
+                  if (!videoId || videoId === data.videoId) continue;
+
+                  const durSec = durationMap[videoId] || 0;
+                  const title = decodeHtmlEntities(item.snippet?.title ?? "");
+                  const channel = decodeHtmlEntities(item.snippet?.channelTitle ?? "");
+                  const thumbs = item.snippet?.thumbnails;
+                  const thumbnail =
+                    thumbs?.high?.url ?? thumbs?.medium?.url ?? thumbs?.default?.url ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+                  if (durSec > 0 && durSec < 60 * 20) {
+                    results.push({
+                      id: videoId,
+                      title,
+                      channel,
+                      duration: formatDuration(durSec),
+                      durationSeconds: durSec,
+                      thumbnail,
+                    });
+                  }
+                }
+                return results;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("YouTube API recommendations failed, falling back to scraper:", e);
+    }
+
+    const rawList = await searchWithScraper(query);
+    return rawList.filter((x) => x.id !== data.videoId);
+  });
+

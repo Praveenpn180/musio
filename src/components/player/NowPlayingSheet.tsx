@@ -6,14 +6,17 @@ import {
   SkipForward,
   Heart,
   ChevronDown,
-  ListMusic,
   Plus,
   Trash2,
   Volume2,
+  Loader2,
 } from "lucide-react";
 import { usePlayer, formatTime } from "@/lib/player";
 import { useLibrary } from "@/lib/library-store";
 import { cn } from "@/lib/utils";
+import { useServerFn } from "@tanstack/react-start";
+import { getRecommendations, type YTTrack } from "@/lib/youtube.functions";
+import { toast } from "sonner";
 
 export function NowPlayingSheet() {
   const {
@@ -32,14 +35,37 @@ export function NowPlayingSheet() {
     clearQueue,
     showNowPlaying,
     setShowNowPlaying,
+    playTrack,
+    addToQueue,
   } = usePlayer();
   const { isFavorite, toggleFavorite, playlists, addToPlaylist } = {
     ...useLibrary(),
     playlists: useLibrary().state.playlists,
   };
 
-  const [tab, setTab] = useState<"player" | "queue">("player");
+  const [tab, setTab] = useState<"player" | "queue" | "recommended">("player");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [recommended, setRecommended] = useState<YTTrack[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+
+  const getRecsFn = useServerFn(getRecommendations);
+
+  useEffect(() => {
+    if (!current) return;
+    let active = true;
+    setLoadingRecs(true);
+    getRecsFn({ data: { videoId: current.id, title: current.title, channel: current.channel } })
+      .then((res) => {
+        if (active) setRecommended(res);
+      })
+      .catch((e) => console.error(e))
+      .finally(() => {
+        if (active) setLoadingRecs(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [current, getRecsFn]);
 
   useEffect(() => {
     if (!showNowPlaying) return;
@@ -72,25 +98,40 @@ export function NowPlayingSheet() {
         >
           <ChevronDown className="h-5 w-5" />
         </button>
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Now Playing
-        </div>
-        <div className="flex gap-1">
+        <div className="flex rounded-full bg-surface/50 p-1">
           <button
-            onClick={() => setTab(tab === "player" ? "queue" : "player")}
+            onClick={() => setTab("player")}
             className={cn(
-              "grid h-10 w-10 place-items-center rounded-full bg-surface/70",
-              tab === "queue" ? "text-brand" : "text-foreground",
+              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
+              tab === "player" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             )}
-            aria-label="Toggle queue"
           >
-            <ListMusic className="h-5 w-5" />
+            Player
+          </button>
+          <button
+            onClick={() => setTab("queue")}
+            className={cn(
+              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
+              tab === "queue" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Queue ({queue.length})
+          </button>
+          <button
+            onClick={() => setTab("recommended")}
+            className={cn(
+              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
+              tab === "recommended" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Recommended
           </button>
         </div>
+        <div className="w-10" />
       </header>
 
-      {tab === "player" ? (
-        <div className="flex flex-1 flex-col px-6 pb-8">
+      {tab === "player" && (
+        <div className="flex flex-1 flex-col px-6 pb-8 overflow-y-auto">
           <div className="mx-auto my-4 aspect-square w-full max-w-sm overflow-hidden rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)]">
             <img
               src={current.thumbnail}
@@ -215,14 +256,16 @@ export function NowPlayingSheet() {
             />
           </div>
         </div>
-      ) : (
-        <div className="flex flex-1 flex-col px-5 pb-8">
+      )}
+
+      {tab === "queue" && (
+        <div className="flex flex-1 flex-col px-5 pb-8 overflow-hidden">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-lg font-semibold font-display">Up Next</h3>
             {queue.length > 0 && (
               <button
                 onClick={clearQueue}
-                className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 Clear
               </button>
@@ -248,9 +291,59 @@ export function NowPlayingSheet() {
                   <button
                     onClick={() => removeFromQueue(t.id)}
                     aria-label="Remove from queue"
-                    className="grid h-8 w-8 place-items-center text-muted-foreground hover:text-destructive"
+                    className="grid h-8 w-8 place-items-center text-muted-foreground hover:text-destructive cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {tab === "recommended" && (
+        <div className="flex flex-1 flex-col px-5 pb-8 overflow-hidden">
+          <div className="mb-3">
+            <h3 className="text-lg font-semibold font-display">Recommended</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Based on {current.title}</p>
+          </div>
+          {loadingRecs && recommended.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground flex-1">
+              <Loader2 className="h-4 w-4 animate-spin text-brand" />
+              Finding similar music...
+            </div>
+          ) : recommended.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground flex-1 flex items-center justify-center">
+              No recommendations found for this track.
+            </p>
+          ) : (
+            <ul className="space-y-1 overflow-auto flex-1 pr-1">
+              {recommended.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 rounded-xl p-2 hover:bg-surface-hover group"
+                >
+                  <button
+                    onClick={() => playTrack(t, { queue: [t, ...recommended.filter((x) => x.id !== t.id)] })}
+                    className="flex flex-1 items-center gap-3 min-w-0 text-left cursor-pointer"
+                  >
+                    <img src={t.thumbnail} alt="" className="h-10 w-10 rounded-md object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium group-hover:text-brand transition-colors">{t.title}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{t.channel}</p>
+                    </div>
+                    <span className="text-[11px] font-mono text-muted-foreground mr-1">{t.duration}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      addToQueue(t);
+                      toast.success(`Added "${t.title}" to queue`);
+                    }}
+                    title="Add to queue"
+                    className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted/30 hover:text-foreground active:scale-90 cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
                   </button>
                 </li>
               ))}

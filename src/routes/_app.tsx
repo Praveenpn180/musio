@@ -1,27 +1,49 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { LibraryProvider } from "@/lib/library-store";
+import { LibraryProvider, useLibrary } from "@/lib/library-store";
 import { PlayerProvider } from "@/lib/player";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { LockScreen } from "@/components/player/LockScreen";
+import { AuthScreen } from "@/components/auth/AuthScreen";
+import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { user, hydrated } = useLibrary();
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#070708] text-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-brand" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppLayout() {
   return (
     <LibraryProvider>
-      <PlayerProvider>
-        <div className="min-h-screen">
-          <Outlet />
-        </div>
-        <MiniPlayer />
-        <BottomNav />
-        <NowPlayingSheet />
-        <LockScreen />
-      </PlayerProvider>
+      <AuthGuard>
+        <PlayerProvider>
+          <div className="min-h-screen">
+            <Outlet />
+          </div>
+          <MiniPlayer />
+          <BottomNav />
+          <NowPlayingSheet />
+          <LockScreen />
+        </PlayerProvider>
+      </AuthGuard>
     </LibraryProvider>
   );
 }

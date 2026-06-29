@@ -4,8 +4,7 @@ import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
-import { Play, Shuffle, Cloud, CloudOff } from "lucide-react";
-import { AuthSheet } from "@/components/auth/AuthSheet";
+import { Play, Shuffle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -24,7 +23,6 @@ function LibraryPage() {
   const { state, user } = useLibrary();
   const { playTrack } = usePlayer();
   const [q, setQ] = useState("");
-  const [authOpen, setAuthOpen] = useState(false);
 
   const tracks = useMemo(() => {
     const list = Object.values(state.saved).sort((a, b) => a.title.localeCompare(b.title));
@@ -43,7 +41,7 @@ function LibraryPage() {
         subtitle={`${Object.keys(state.saved).length} saved tracks`}
       />
 
-      {user ? (
+      {user && (
         <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-border bg-card/30 p-4 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 border border-border/40 shadow-inner">
@@ -78,27 +76,7 @@ function LibraryPage() {
             Sign Out
           </button>
         </div>
-      ) : (
-        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
-              <CloudOff className="h-4 w-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-foreground">Cloud Backup Disabled</span>
-              <span className="text-[10px] text-muted-foreground">Sign in to save playlists & tracks</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setAuthOpen(true)}
-            className="rounded-full bg-brand px-4 py-1.5 text-[10px] font-semibold text-primary-foreground shadow-[0_4px_12px_var(--color-brand-glow)] hover:bg-brand/90 active:scale-95 transition-all cursor-pointer"
-          >
-            Connect
-          </button>
-        </div>
       )}
-
-      <AuthSheet open={authOpen} onOpenChange={setAuthOpen} />
 
       {tracks.length > 0 && (
         <div className="flex items-center gap-2 px-5">

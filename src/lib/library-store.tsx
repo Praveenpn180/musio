@@ -43,6 +43,7 @@ function save(state: LibraryState) {
 type Ctx = {
   state: LibraryState;
   user: User | null;
+  hydrated: boolean;
   saveTrack: (t: Track) => Promise<void>;
   removeTrack: (id: string) => Promise<void>;
   toggleFavorite: (t: Track) => Promise<void>;
@@ -251,6 +252,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const ctx: Ctx = {
     state,
     user,
+    hydrated,
     isSaved: (id) => !!state.saved[id],
     isFavorite: (id) => state.favorites.includes(id),
     saveTrack: async (t) => {

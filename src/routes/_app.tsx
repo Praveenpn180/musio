@@ -6,6 +6,7 @@ import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { LockScreen } from "@/components/player/LockScreen";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import { OnboardingScreen } from "@/components/auth/OnboardingScreen";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -25,6 +26,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <AuthScreen />;
+  }
+
+  const preferredLangs = user.user_metadata?.preferred_languages;
+  if (!preferredLangs || !Array.isArray(preferredLangs) || preferredLangs.length === 0) {
+    return <OnboardingScreen />;
   }
 
   return <>{children}</>;

@@ -70,7 +70,7 @@ function loadYTApi(): Promise<void> {
 }
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const { pushRecent } = useLibrary();
+  const { pushRecent, user } = useLibrary();
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tickRef = useRef<number | null>(null);
@@ -95,7 +95,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const historyRef = useRef<Track[]>([]);
   const autoplayRef = useRef(true);
   const getRecsRef = useRef<(args: {
-    data: { videoId?: string; title?: string; channel?: string };
+    data: { videoId?: string; title?: string; channel?: string; preferredLanguages?: string[] };
   }) => Promise<Awaited<ReturnType<typeof getRecommendations>>>>(undefined);
 
   const getRecsFn = useServerFn(getRecommendations);
@@ -231,8 +231,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     async (basis: Track) => {
       setIsLoadingAutoplay(true);
       try {
+        const preferredLanguages = user?.user_metadata?.preferred_languages;
         const recs = await getRecsRef.current?.({
-          data: { videoId: basis.id, title: basis.title, channel: basis.channel },
+          data: {
+            videoId: basis.id,
+            title: basis.title,
+            channel: basis.channel,
+            preferredLanguages,
+          },
         });
         if (!recs || recs.length === 0) return false;
 
@@ -259,7 +265,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setIsLoadingAutoplay(false);
       }
     },
-    [pushRecent],
+    [pushRecent, user],
   );
 
   const advance = useCallback(() => {

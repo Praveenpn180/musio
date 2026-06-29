@@ -55,6 +55,7 @@ type Ctx = {
   renamePlaylist: (id: string, name: string) => Promise<void>;
   addToPlaylist: (playlistId: string, track: Track) => Promise<void>;
   removeFromPlaylist: (playlistId: string, trackId: string) => Promise<void>;
+  updatePreferredLanguages: (langs: string[]) => Promise<void>;
 };
 
 const LibraryContext = createContext<Ctx | null>(null);
@@ -457,6 +458,21 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error("Failed to remove track from playlist in Supabase:", err);
         }
+      }
+    },
+    updatePreferredLanguages: async (langs) => {
+      if (!user) return;
+      try {
+        const { data, error } = await supabase.auth.updateUser({
+          data: { preferred_languages: langs },
+        });
+        if (error) throw error;
+        if (data?.user) {
+          setUser(data.user);
+        }
+      } catch (err) {
+        console.error("Failed to update preferred languages in Supabase:", err);
+        throw err;
       }
     },
   };

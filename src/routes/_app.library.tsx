@@ -1,13 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
-import { Play, Shuffle } from "lucide-react";
+import { Check, Loader2, Play, Shuffle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+
+const ALL_LANGUAGES = [
+  { id: "english", name: "English" },
+  { id: "hindi", name: "Hindi" },
+  { id: "tamil", name: "Tamil" },
+  { id: "telugu", name: "Telugu" },
+  { id: "punjabi", name: "Punjabi" },
+  { id: "malayalam", name: "Malayalam" },
+  { id: "kannada", name: "Kannada" },
+  { id: "bengali", name: "Bengali" },
+  { id: "spanish", name: "Spanish" },
+  { id: "korean", name: "K-Pop" },
+  { id: "japanese", name: "J-Pop" },
+  { id: "french", name: "French" },
+];
 
 export const Route = createFileRoute("/_app/library")({
   head: () => ({
@@ -20,9 +37,19 @@ export const Route = createFileRoute("/_app/library")({
 });
 
 function LibraryPage() {
-  const { state, user } = useLibrary();
+  const { state, user, updatePreferredLanguages } = useLibrary();
   const { playTrack } = usePlayer();
   const [q, setQ] = useState("");
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [editSelected, setEditSelected] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Sync selected languages when opening the modal
+  useEffect(() => {
+    if (prefsOpen && user) {
+      setEditSelected(user.user_metadata?.preferred_languages || []);
+    }
+  }, [prefsOpen, user]);
 
   const tracks = useMemo(() => {
     const list = Object.values(state.saved).sort((a, b) => a.title.localeCompare(b.title));
@@ -42,41 +69,129 @@ function LibraryPage() {
       />
 
       {user && (
-        <div className="mx-5 mb-4 flex items-center justify-between rounded-2xl border border-border bg-card/30 p-4 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 border border-border/40 shadow-inner">
-              <AvatarImage 
-                src={user.user_metadata?.avatar_url || ""} 
-                alt={user.user_metadata?.full_name || "User Profile"} 
-              />
-              <AvatarFallback className="bg-brand/10 text-brand text-xs font-semibold">
-                {(user.user_metadata?.full_name || user.email || "U").slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-foreground truncate">
-                {user.user_metadata?.full_name || "Musio Listener"}
+        <div className="mx-5 mb-4 flex flex-col rounded-2xl border border-border bg-card/30 p-4 backdrop-blur-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10 border border-border/40 shadow-inner">
+                <AvatarImage 
+                  src={user.user_metadata?.avatar_url || ""} 
+                  alt={user.user_metadata?.full_name || "User Profile"} 
+                />
+                <AvatarFallback className="bg-brand/10 text-brand text-xs font-semibold">
+                  {(user.user_metadata?.full_name || user.email || "U").slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {user.user_metadata?.full_name || "Musio Listener"}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                  {user.email}
+                </span>
+                <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded bg-brand/10 px-1 py-0.5 text-[8px] font-medium text-brand">
+                  <span className="h-1 w-1 rounded-full bg-brand animate-pulse" /> Cloud Sync Active
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const { error } = await supabase.auth.signOut();
+                if (error) toast.error(error.message);
+                else toast.success("Signed out successfully!");
+              }}
+              className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] font-semibold hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
+
+          <div className="border-t border-border/40 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                Music Languages
               </span>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
-                {user.email}
-              </span>
-              <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded bg-brand/10 px-1 py-0.5 text-[8px] font-medium text-brand">
-                <span className="h-1 w-1 rounded-full bg-brand animate-pulse" /> Cloud Backup Active
-              </span>
+              <button
+                onClick={() => setPrefsOpen(true)}
+                className="text-[10px] font-semibold text-brand hover:underline cursor-pointer"
+              >
+                Edit Preferences
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(user.user_metadata?.preferred_languages || []).length > 0 ? (
+                (user.user_metadata?.preferred_languages as string[]).map((lang) => (
+                  <span
+                    key={lang}
+                    className="inline-flex items-center rounded-full bg-brand/5 border border-brand/20 px-2.5 py-0.5 text-[10px] font-medium text-brand capitalize"
+                  >
+                    {lang}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[10px] text-muted-foreground italic">No preference selected</span>
+              )}
             </div>
           </div>
-          <button
-            onClick={async () => {
-              const { error } = await supabase.auth.signOut();
-              if (error) toast.error(error.message);
-              else toast.success("Signed out successfully!");
-            }}
-            className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] font-semibold hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            Sign Out
-          </button>
         </div>
       )}
+
+      <Sheet open={prefsOpen} onOpenChange={setPrefsOpen}>
+        <SheetContent side="bottom" className="mx-auto max-w-md rounded-t-[32px] border-t border-border bg-card/95 px-6 pb-8 pt-6 backdrop-blur-xl">
+          <SheetHeader className="text-left">
+            <SheetTitle className="text-xl font-bold tracking-tight">Music Preferences</SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
+              Select languages to customize your autoplay recommendations.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4 max-h-[60vh] overflow-y-auto pr-1 no-scrollbar">
+            <div className="grid grid-cols-2 gap-2">
+              {ALL_LANGUAGES.map((lang) => {
+                const isSelected = editSelected.includes(lang.id);
+                return (
+                  <button
+                    key={lang.id}
+                    onClick={() => {
+                      setEditSelected((prev) =>
+                        prev.includes(lang.id)
+                          ? prev.filter((x) => x !== lang.id)
+                          : [...prev, lang.id]
+                      );
+                    }}
+                    className={`flex items-center justify-between rounded-full border px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-brand/40 bg-brand/5 text-brand"
+                        : "border-border bg-card/30 text-muted-foreground hover:bg-card/50"
+                    }`}
+                  >
+                    <span>{lang.name}</span>
+                    {isSelected && <Check className="h-3.5 w-3.5" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <Button
+              disabled={editSelected.length === 0 || saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  await updatePreferredLanguages(editSelected);
+                  toast.success("Preferences updated successfully!");
+                  setPrefsOpen(false);
+                } catch {
+                  toast.error("Failed to update preferences.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="mt-4 h-11 w-full rounded-full bg-brand text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_var(--color-brand-glow)] hover:bg-brand/90 active:scale-[0.98] cursor-pointer"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Save Changes"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {tracks.length > 0 && (
         <div className="flex items-center gap-2 px-5">

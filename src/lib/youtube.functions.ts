@@ -192,6 +192,104 @@ export const searchYouTube = createServerFn({ method: "GET" })
     return searchWithScraper(data.query);
   });
 
+function detectLanguageOrRegion(title: string, channel: string): string | null {
+  const text = `${title} ${channel}`.toLowerCase();
+
+  // 1. Script-based detection
+  if (/[\u0900-\u097F]/.test(title)) return "hindi";
+  if (/[\u0B80-\u0BFF]/.test(title)) return "tamil";
+  if (/[\u0C00-\u0C7F]/.test(title)) return "telugu";
+  if (/[\u0D00-\u0D7F]/.test(title)) return "malayalam";
+  if (/[\u0C80-\u0CFF]/.test(title)) return "kannada";
+  if (/[\u0980-\u09FF]/.test(title)) return "bengali";
+  if (/[\uac00-\ud7af\u1100-\u11ff]/.test(title)) return "korean";
+  if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(title)) return "japanese";
+  if (/[\u0400-\u04FF]/.test(title)) return "russian";
+  if (/[\u0600-\u06FF]/.test(title)) return "arabic";
+
+  // 2. Channel-based heuristics
+  const channelLower = channel.toLowerCase();
+  if (
+    channelLower.includes("t-series") ||
+    channelLower.includes("tseries") ||
+    channelLower.includes("zeemusic") ||
+    channelLower.includes("tips official") ||
+    channelLower.includes("yrf") ||
+    channelLower.includes("yash raj films")
+  ) {
+    if (text.includes("tamil")) return "tamil";
+    if (text.includes("telugu")) return "telugu";
+    if (text.includes("punjabi")) return "punjabi";
+    if (text.includes("bhojpuri")) return "bhojpuri";
+    if (text.includes("malayalam")) return "malayalam";
+    if (text.includes("kannada")) return "kannada";
+    return "hindi";
+  }
+  if (
+    channelLower.includes("aditya music") ||
+    channelLower.includes("adityamusic") ||
+    channelLower.includes("lahari music") ||
+    channelLower.includes("madhura audio") ||
+    channelLower.includes("mango music")
+  ) {
+    return "telugu";
+  }
+  if (
+    channelLower.includes("think music") ||
+    channelLower.includes("thinkmusicsouth") ||
+    channelLower.includes("sony music south")
+  ) {
+    if (text.includes("telugu")) return "telugu";
+    if (text.includes("malayalam")) return "malayalam";
+    if (text.includes("kannada")) return "kannada";
+    return "tamil";
+  }
+  if (channelLower.includes("muzik247") || channelLower.includes("satyam audios")) {
+    return "malayalam";
+  }
+  if (
+    channelLower.includes("speed records") ||
+    channelLower.includes("geet mp3") ||
+    channelLower.includes("white hill music") ||
+    channelLower.includes("jass records")
+  ) {
+    return "punjabi";
+  }
+  if (
+    channelLower.includes("smtown") ||
+    channelLower.includes("jyp entertainment") ||
+    channelLower.includes("hybe labels") ||
+    channelLower.includes("yg entertainment") ||
+    channelLower.includes("stone music")
+  ) {
+    return "korean";
+  }
+
+  // 3. Keyword-based detection
+  const keywords: Record<string, string[]> = {
+    tamil: ["tamil", "kollywood", "anirudh", "ar rahman"],
+    telugu: ["telugu", "tollywood", "devi sri prasad", "thaman s"],
+    hindi: ["hindi", "bollywood", "arijit singh", "nehakakkar", "coke studio"],
+    punjabi: ["punjabi", "ap dhillon", "diljit dosanjh", "moose wala", "karan aujla"],
+    malayalam: ["malayalam", "mollywood", "sushin shyam"],
+    kannada: ["kannada", "sandalwood"],
+    korean: ["korean", "k-pop", "kpop", "bts", "blackpink", "twice", "newjeans"],
+    japanese: ["japanese", "j-pop", "jpop", "anime ost", "vocaloid"],
+    spanish: ["spanish", "español", "reggaeton", "bad bunny", "latino"],
+    french: ["french", "français"],
+  };
+
+  for (const [lang, list] of Object.entries(keywords)) {
+    for (const kw of list) {
+      if (text.includes(kw)) {
+        return lang;
+      }
+    }
+  }
+
+  return null;
+}
+
 export const getRecommendations = createServerFn({ method: "GET" })
   .inputValidator((data) =>
     z
@@ -199,6 +297,7 @@ export const getRecommendations = createServerFn({ method: "GET" })
         videoId: z.string().optional(),
         title: z.string().optional(),
         channel: z.string().optional(),
+        preferredLanguages: z.array(z.string()).optional(),
       })
       .parse(data)
   )
@@ -213,7 +312,18 @@ export const getRecommendations = createServerFn({ method: "GET" })
         .replace(/\(Video.*?\)/gi, "")
         .replace(/\(Lyric.*?\)/gi, "")
         .trim();
-      query = `${data.channel} ${cleanTitle} radio`;
+
+      // 1. Detect language of the basis song
+      let lang = detectLanguageOrRegion(data.title, data.channel);
+
+      // 2. Fall back to user preferences if language isn't directly detectable
+      if (!lang && data.preferredLanguages && data.preferredLanguages.length > 0) {
+        lang = data.preferredLanguages[0];
+      }
+
+      query = lang
+        ? `${data.channel} ${cleanTitle} ${lang} radio`
+        : `${data.channel} ${cleanTitle} radio`;
     }
 
     try {

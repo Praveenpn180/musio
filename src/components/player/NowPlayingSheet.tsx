@@ -10,6 +10,8 @@ import {
   Trash2,
   Volume2,
   Loader2,
+  Lock,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import { usePlayer, formatTime } from "@/lib/player";
 import { useLibrary } from "@/lib/library-store";
@@ -37,6 +39,10 @@ export function NowPlayingSheet() {
     setShowNowPlaying,
     playTrack,
     addToQueue,
+    lock,
+    autoplayEnabled,
+    setAutoplayEnabled,
+    isLoadingAutoplay,
   } = usePlayer();
   const { isFavorite, toggleFavorite, playlists, addToPlaylist } = {
     ...useLibrary(),
@@ -127,7 +133,14 @@ export function NowPlayingSheet() {
             Recommended
           </button>
         </div>
-        <div className="w-10" />
+        <button
+          onClick={lock}
+          aria-label="Enter lock screen"
+          title="Enter lock screen"
+          className="grid h-10 w-10 place-items-center rounded-full bg-surface/70 text-foreground"
+        >
+          <Lock className="h-4 w-4" />
+        </button>
       </header>
 
       {tab === "player" && (
@@ -195,6 +208,36 @@ export function NowPlayingSheet() {
               )}
             </div>
           )}
+
+          {/* autoplay toggle */}
+          <button
+            onClick={() => setAutoplayEnabled(!autoplayEnabled)}
+            className={cn(
+              "mt-4 flex items-center justify-between rounded-2xl border border-border px-4 py-3 transition-colors cursor-pointer",
+              autoplayEnabled ? "bg-brand/10" : "bg-surface/50",
+            )}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <InfinityIcon
+                className={cn("h-4 w-4", autoplayEnabled ? "text-brand" : "text-muted-foreground")}
+              />
+              Autoplay
+              {isLoadingAutoplay && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            </span>
+            <span
+              className={cn(
+                "relative h-6 w-10 shrink-0 rounded-full transition-colors",
+                autoplayEnabled ? "bg-brand" : "bg-muted",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform",
+                  autoplayEnabled ? "translate-x-[18px]" : "translate-x-0.5",
+                )}
+              />
+            </span>
+          </button>
 
           {/* progress */}
           <div className="mt-6">

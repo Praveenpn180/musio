@@ -4,6 +4,7 @@ import { PlayerProvider } from "@/lib/player";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
+import { LockScreen } from "@/components/player/LockScreen";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -19,6 +20,7 @@ function AppLayout() {
         <MiniPlayer />
         <BottomNav />
         <NowPlayingSheet />
+        <LockScreen />
       </PlayerProvider>
     </LibraryProvider>
   );

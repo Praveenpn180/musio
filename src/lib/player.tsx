@@ -7,8 +7,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import type { Track } from "./library-store";
 import { useLibrary } from "./library-store";
+import { getRecommendations } from "./youtube.functions";
+
+const AUTOPLAY_STORAGE_KEY = "musio:autoplay-enabled";
 
 declare global {
   interface Window {
@@ -28,6 +32,12 @@ type PlayerCtx = {
   volume: number;
   showNowPlaying: boolean;
   setShowNowPlaying: (v: boolean) => void;
+  locked: boolean;
+  lock: () => void;
+  unlock: () => void;
+  autoplayEnabled: boolean;
+  setAutoplayEnabled: (v: boolean) => void;
+  isLoadingAutoplay: boolean;
   playTrack: (t: Track, opts?: { queue?: Track[] }) => void;
   togglePlay: () => void;
   next: () => void;
@@ -74,6 +84,55 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(80);
   const [showNowPlaying, setShowNowPlaying] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [autoplayEnabled, setAutoplayEnabledState] = useState(true);
+  const [isLoadingAutoplay, setIsLoadingAutoplay] = useState(false);
+
+  // Refs mirror latest state. The YT.Player event handlers are bound once on
+  // mount (see the init effect below), so anything they read must come from a
+  // ref rather than a captured state value, or it will be permanently stale.
+  const currentRef = useRef<Track | null>(null);
+  const historyRef = useRef<Track[]>([]);
+  const autoplayRef = useRef(true);
+  const getRecsRef = useRef<(args: {
+    data: { videoId?: string; title?: string; channel?: string };
+  }) => Promise<Awaited<ReturnType<typeof getRecommendations>>>>(undefined);
+
+  const getRecsFn = useServerFn(getRecommendations);
+  useEffect(() => {
+    getRecsRef.current = getRecsFn;
+  }, [getRecsFn]);
+
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+  useEffect(() => {
+    autoplayRef.current = autoplayEnabled;
+  }, [autoplayEnabled]);
+
+  // restore the autoplay preference once on mount
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(AUTOPLAY_STORAGE_KEY);
+      if (saved !== null) setAutoplayEnabledState(saved === "true");
+    } catch {}
+  }, []);
+
+  const setAutoplayEnabled = useCallback((v: boolean) => {
+    setAutoplayEnabledState(v);
+    try {
+      window.localStorage.setItem(AUTOPLAY_STORAGE_KEY, String(v));
+    } catch {}
+  }, []);
+
+  const lock = useCallback(() => {
+    setLocked(true);
+    setShowNowPlaying(false);
+  }, []);
+  const unlock = useCallback(() => setLocked(false), []);
 
   // init the iframe player once
   useEffect(() => {
@@ -166,9 +225,63 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [current, playing]);
 
+  // Fetches "related" tracks for `basis` and continues playback with them so
+  // the queue never has to run dry. Returns true if it found something to play.
+  const fetchAndQueueRecommendations = useCallback(
+    async (basis: Track) => {
+      setIsLoadingAutoplay(true);
+      try {
+        const recs = await getRecsRef.current?.({
+          data: { videoId: basis.id, title: basis.title, channel: basis.channel },
+        });
+        if (!recs || recs.length === 0) return false;
+
+        // avoid immediately replaying anything we've already heard recently
+        const heardIds = new Set([basis.id, ...historyRef.current.slice(0, 30).map((t) => t.id)]);
+        const fresh = recs.filter((t) => !heardIds.has(t.id));
+        const pickFrom = fresh.length > 0 ? fresh : recs.filter((t) => t.id !== basis.id);
+        if (pickFrom.length === 0) return false;
+
+        const [next_, ...rest] = pickFrom;
+        setHistory((h) => [basis, ...h].slice(0, 50));
+        setCurrent(next_);
+        setQueue(rest);
+        pushRecent(next_);
+        try {
+          playerRef.current?.loadVideoById?.(next_.id);
+          playerRef.current?.playVideo?.();
+        } catch {}
+        return true;
+      } catch (e) {
+        console.warn("Autoplay: failed to fetch recommendations", e);
+        return false;
+      } finally {
+        setIsLoadingAutoplay(false);
+      }
+    },
+    [pushRecent],
+  );
+
   const advance = useCallback(() => {
     setQueue((q) => {
       if (q.length === 0) {
+        const basis = currentRef.current;
+        if (autoplayRef.current && basis) {
+          // Fire-and-forget: this will set current/queue itself once it resolves.
+          // Leave the queue untouched in the meantime instead of stopping playback.
+          fetchAndQueueRecommendations(basis).then((found) => {
+            if (!found) {
+              setCurrent((c) => {
+                if (c) setHistory((h) => [c, ...h].slice(0, 50));
+                return null;
+              });
+              try {
+                playerRef.current?.stopVideo?.();
+              } catch {}
+            }
+          });
+          return q;
+        }
         setCurrent((c) => {
           if (c) setHistory((h) => [c, ...h].slice(0, 50));
           return null;
@@ -190,7 +303,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       } catch {}
       return rest;
     });
-  }, [pushRecent]);
+  }, [pushRecent, fetchAndQueueRecommendations]);
 
   const previous = useCallback(() => {
     setHistory((h) => {
@@ -307,6 +420,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     volume,
     showNowPlaying,
     setShowNowPlaying,
+    locked,
+    lock,
+    unlock,
+    autoplayEnabled,
+    setAutoplayEnabled,
+    isLoadingAutoplay,
     playTrack,
     togglePlay,
     next: advance,

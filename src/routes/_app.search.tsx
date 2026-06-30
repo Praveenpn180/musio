@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search as SearchIcon, X, Loader2 } from "lucide-react";
 import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
@@ -22,12 +22,16 @@ function SearchPage() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<YTTrack[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { playTrack } = usePlayer();
+  const { playTrack, blockedTracks } = usePlayer();
   const fn = useServerFn(searchYouTube);
   const mutation = useMutation({
     mutationFn: async (query: string) => fn({ data: { query } }),
     onSuccess: (r) => setResults(r),
   });
+
+  const visibleResults = useMemo(() => {
+    return results.filter((t) => !blockedTracks.includes(t.id));
+  }, [results, blockedTracks]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -52,6 +56,7 @@ function SearchPage() {
             onChange={(e) => setQ(e.target.value)}
             type="search"
             inputMode="search"
+            autoComplete="off"
             placeholder="Songs, artists, anything"
             className="h-12 w-full rounded-full border border-border bg-card pl-11 pr-12 text-sm outline-none placeholder:text-muted-foreground focus:border-brand/50 focus:ring-2 focus:ring-brand/20"
           />
@@ -84,18 +89,18 @@ function SearchPage() {
             Could not load results. Try again.
           </p>
         )}
-        {!mutation.isPending && results.length === 0 && !mutation.isError && (
+        {!mutation.isPending && visibleResults.length === 0 && !mutation.isError && (
           <p className="py-12 text-center text-sm text-muted-foreground">
             Search for a song to get started.
           </p>
         )}
-        {results.length > 0 && (
+        {visibleResults.length > 0 && (
           <div className="space-y-1">
-            {results.map((t) => (
+            {visibleResults.map((t) => (
               <TrackRow
                 key={t.id}
                 track={t}
-                onPlay={() => playTrack(t, { queue: results })}
+                onPlay={() => playTrack(t, { queue: visibleResults })}
               />
             ))}
           </div>

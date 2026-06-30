@@ -43,6 +43,7 @@ export function NowPlayingSheet() {
     autoplayEnabled,
     setAutoplayEnabled,
     isLoadingAutoplay,
+    blockedTracks,
   } = usePlayer();
   const { isFavorite, toggleFavorite, playlists, addToPlaylist } = {
     ...useLibrary(),
@@ -53,6 +54,8 @@ export function NowPlayingSheet() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [recommended, setRecommended] = useState<YTTrack[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
+
+  const visibleRecommended = recommended.filter((t) => !blockedTracks.includes(t.id));
 
   const getRecsFn = useServerFn(getRecommendations);
 
@@ -351,24 +354,24 @@ export function NowPlayingSheet() {
             <h3 className="text-lg font-semibold font-display">Recommended</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Based on {current.title}</p>
           </div>
-          {loadingRecs && recommended.length === 0 ? (
+          {loadingRecs && visibleRecommended.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground flex-1">
               <Loader2 className="h-4 w-4 animate-spin text-brand" />
               Finding similar music...
             </div>
-          ) : recommended.length === 0 ? (
+          ) : visibleRecommended.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground flex-1 flex items-center justify-center">
               No recommendations found for this track.
             </p>
           ) : (
             <ul className="space-y-1 overflow-auto flex-1 pr-1">
-              {recommended.map((t) => (
+              {visibleRecommended.map((t) => (
                 <li
                   key={t.id}
                   className="flex items-center gap-3 rounded-xl p-2 hover:bg-surface-hover group"
                 >
                   <button
-                    onClick={() => playTrack(t, { queue: [t, ...recommended.filter((x) => x.id !== t.id)] })}
+                    onClick={() => playTrack(t, { queue: [t, ...visibleRecommended.filter((x) => x.id !== t.id)] })}
                     className="flex flex-1 items-center gap-3 min-w-0 text-left cursor-pointer"
                   >
                     <img src={t.thumbnail} alt="" className="h-10 w-10 rounded-md object-cover" />

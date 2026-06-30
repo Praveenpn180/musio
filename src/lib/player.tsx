@@ -11,8 +11,10 @@ import { useServerFn } from "@tanstack/react-start";
 import type { Track } from "./library-store";
 import { useLibrary } from "./library-store";
 import { getRecommendations } from "./youtube.functions";
+import { toast } from "sonner";
 
 const AUTOPLAY_STORAGE_KEY = "musio:autoplay-enabled";
+const BLOCKED_TRACKS_STORAGE_KEY = "musio:blocked-tracks";
 
 declare global {
   interface Window {
@@ -47,6 +49,8 @@ type PlayerCtx = {
   addToQueue: (t: Track) => void;
   removeFromQueue: (id: string) => void;
   clearQueue: () => void;
+  blockedTracks: string[];
+  blockTrack: (id: string) => void;
 };
 
 const Ctx = createContext<PlayerCtx | null>(null);
@@ -70,10 +74,37 @@ function loadYTApi(): Promise<void> {
 }
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const { pushRecent, user } = useLibrary();
+  const { pushRecent, user, removeTrack } = useLibrary();
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tickRef = useRef<number | null>(null);
+  const advanceRef = useRef<() => void>(null as any);
+
+  const [blockedTracks, setBlockedTracks] = useState<string[]>([]);
+  const blockedTracksRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    blockedTracksRef.current = blockedTracks;
+  }, [blockedTracks]);
+
+  // restore blocked tracks on mount
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(BLOCKED_TRACKS_STORAGE_KEY);
+      if (saved) setBlockedTracks(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const blockTrack = useCallback((id: string) => {
+    setBlockedTracks((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try {
+        window.localStorage.setItem(BLOCKED_TRACKS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const [current, setCurrent] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
@@ -154,8 +185,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             else if (e.data === YTState.PAUSED) setPlaying(false);
             else if (e.data === YTState.ENDED) {
               setPlaying(false);
-              advance();
+              advanceRef.current?.();
             }
+          },
+          onError: (e: any) => {
+            console.error("YouTube Player Error:", e.data);
+            const errCode = e.data;
+            if (currentRef.current) {
+              const brokenId = currentRef.current.id;
+              blockTrack(brokenId);
+              removeTrack(brokenId);
+            }
+            if (errCode === 101 || errCode === 150) {
+              toast.error("This song has disabled embedding. Skipping...");
+            } else if (errCode === 100) {
+              toast.error("This song was not found. Skipping...");
+            } else {
+              toast.error("Failed to play this song. Skipping...");
+            }
+            advanceRef.current?.();
           },
         },
       });
@@ -278,7 +326,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           fetchAndQueueRecommendations(basis).then((found) => {
             if (!found) {
               setCurrent((c) => {
-                if (c) setHistory((h) => [c, ...h].slice(0, 50));
+                if (c && !blockedTracksRef.current.includes(c.id)) {
+                  setHistory((h) => [c, ...h].slice(0, 50));
+                }
                 return null;
               });
               try {
@@ -289,7 +339,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return q;
         }
         setCurrent((c) => {
-          if (c) setHistory((h) => [c, ...h].slice(0, 50));
+          if (c && !blockedTracksRef.current.includes(c.id)) {
+            setHistory((h) => [c, ...h].slice(0, 50));
+          }
           return null;
         });
         try {
@@ -299,7 +351,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       const [next_, ...rest] = q;
       setCurrent((c) => {
-        if (c) setHistory((h) => [c, ...h].slice(0, 50));
+        if (c && !blockedTracksRef.current.includes(c.id)) {
+          setHistory((h) => [c, ...h].slice(0, 50));
+        }
         return next_;
       });
       pushRecent(next_);
@@ -310,6 +364,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return rest;
     });
   }, [pushRecent, fetchAndQueueRecommendations]);
+
+  useEffect(() => {
+    advanceRef.current = advance;
+  }, [advance]);
 
   const previous = useCallback(() => {
     setHistory((h) => {
@@ -441,6 +499,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     addToQueue,
     removeFromQueue,
     clearQueue,
+    blockedTracks,
+    blockTrack,
   };
 
   return (

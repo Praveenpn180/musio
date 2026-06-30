@@ -143,9 +143,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
                 .filter((id) => !!tracksMap[id]) ?? [],
           })) ?? [],
       });
-      setHydrated(true);
     } catch (err) {
       console.error("[Supabase Load Error]", err);
+    } finally {
+      setHydrated(true);
     }
   };
 

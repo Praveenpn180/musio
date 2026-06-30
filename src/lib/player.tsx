@@ -446,20 +446,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      {/* Hidden YouTube player */}
+      {/* Hidden YouTube player (placed in viewport with non-zero opacity to prevent browser throttling/pausing in background tabs) */}
       <div
         aria-hidden
         style={{
           position: "fixed",
-          left: -9999,
-          top: -9999,
-          width: 1,
-          height: 1,
-          opacity: 0,
+          bottom: 10,
+          right: 10,
+          width: 200,
+          height: 200,
+          opacity: 0.001,
           pointerEvents: "none",
+          zIndex: -9999,
         }}
       >
-        <div ref={containerRef} />
+        <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       </div>
     </Ctx.Provider>
   );

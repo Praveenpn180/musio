@@ -405,7 +405,32 @@ export const getAudioDownloadUrl = createServerFn({ method: "GET" })
       .replace(/[/\\?%*:|"<>]/g, "_")
       .trim();
 
-    // 1. Primary: Try @distube/ytdl-core
+    // 1. Primary: Try yt-dlp CLI (most reliable and updated)
+    try {
+      const { execFile } = await import("child_process");
+      const { promisify } = await import("util");
+      const execFileAsync = promisify(execFile);
+      const { stdout } = await execFileAsync(
+        "yt-dlp",
+        ["-g", "-f", "bestaudio", `https://www.youtube.com/watch?v=${data.videoId}`],
+        { timeout: 15000 }
+      );
+      const rawUrl = stdout.trim().split(/\r?\n/)[0];
+      if (rawUrl && rawUrl.startsWith("http")) {
+        let ext = "webm";
+        if (rawUrl.includes("mime=audio%2Fmp4") || rawUrl.includes("mime=audio/m4a")) ext = "m4a";
+        else if (rawUrl.includes("mime=audio%2Fwebm")) ext = "webm";
+        return {
+          url: rawUrl,
+          ext,
+          filename: `${cleanTitle}.${ext}`,
+        };
+      }
+    } catch (e) {
+      console.warn("yt-dlp CLI fetch failed, trying fallbacks:", e);
+    }
+
+    // 2. Secondary: Try @distube/ytdl-core
     try {
       const ytdlModule = await import("@distube/ytdl-core");
       const ytdl = ytdlModule.default || ytdlModule;
@@ -425,7 +450,7 @@ export const getAudioDownloadUrl = createServerFn({ method: "GET" })
       console.warn("ytdl-core fetch failed, trying fallbacks:", e);
     }
 
-    // 2. Secondary: Try Invidious Instances
+    // 3. Tertiary: Try Invidious Instances
     const invidiousInstances = [
       "https://inv.tux.pizza",
       "https://invidious.nerdvpn.de",
@@ -459,29 +484,35 @@ export const getAudioDownloadUrl = createServerFn({ method: "GET" })
       } catch {}
     }
 
-    // 3. Tertiary: Try Cobalt API
-    try {
-      const cobaltRes = await fetch("https://api.cobalt.tools/", {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${data.videoId}`,
-          downloadMode: "audio",
-          audioFormat: "mp3",
-        }),
-      });
-      if (cobaltRes.ok) {
-        const cobaltData = await cobaltRes.json();
-        if (cobaltData.url) {
-          return {
-            url: cobaltData.url,
-            ext: "mp3",
-            filename: `${cleanTitle}.mp3`,
-          };
+    // 4. Quaternary: Try Cobalt API & mirrors
+    const cobaltEndpoints = [
+      "https://cobalt.qtf.ai/api/json",
+      "https://api.cobalt.tools/",
+    ];
+    for (const endpoint of cobaltEndpoints) {
+      try {
+        const cobaltRes = await fetch(endpoint, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" },
+          body: JSON.stringify({
+            url: `https://www.youtube.com/watch?v=${data.videoId}`,
+            downloadMode: "audio",
+            audioFormat: "mp3",
+          }),
+        });
+        if (cobaltRes.ok) {
+          const cobaltData = await cobaltRes.json();
+          if (cobaltData.url) {
+            return {
+              url: cobaltData.url,
+              ext: "mp3",
+              filename: `${cleanTitle}.mp3`,
+            };
+          }
         }
+      } catch (e) {
+        console.warn("Cobalt fallback failed:", e);
       }
-    } catch (e) {
-      console.warn("Cobalt fallback failed:", e);
     }
 
     throw new Error("Unable to retrieve audio stream URL for this track. Please try again later.");

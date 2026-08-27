@@ -4,37 +4,76 @@ import type { YTTrack } from "./youtube.functions";
 /**
  * Triggers a browser download for a given audio URL or blob.
  */
-export async function saveAudioFile(url: string, filename: string): Promise<void> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
+/**
+ * Triggers a browser download for a given audio URL or base64 data.
+ */
+export async function saveAudioFile(
+  url: string,
+  filename: string,
+  base64Data?: string,
+  mimeType?: string,
+): Promise<void> {
+  if (base64Data) {
+    try {
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: mimeType || "audio/webm" });
+      const blobUrl = URL.createObjectURL(blob);
 
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    }, 1000);
-  } catch {
-    // Direct link fallback if blob fetch suffers CORS restriction
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = url;
-    a.download = filename;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-    }, 1000);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 2000);
+      return;
+    } catch (e) {
+      console.warn("Base64 blob download failed, falling back to direct URL:", e);
+    }
   }
+
+  // Direct download attempt via blob fetch or anchor tag
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (res.ok) {
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 2000);
+      return;
+    }
+  } catch {
+    // Cross-origin fallback
+  }
+
+  // Anchor fallback for cross-origin URLs
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  a.download = filename;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+  }, 1000);
 }
 
 /**
@@ -46,6 +85,8 @@ export async function downloadSingleTrack(
     url: string;
     ext: string;
     filename: string;
+    base64Data?: string;
+    mimeType?: string;
   }>,
 ): Promise<boolean> {
   const toastId = toast.loading(`Preparing download for "${track.title}"...`);
@@ -55,9 +96,14 @@ export async function downloadSingleTrack(
     });
     
     toast.loading(`Downloading "${track.title}"...`, { id: toastId });
-    await saveAudioFile(downloadInfo.url, downloadInfo.filename);
+    await saveAudioFile(
+      downloadInfo.url,
+      downloadInfo.filename,
+      downloadInfo.base64Data,
+      downloadInfo.mimeType,
+    );
     
-    toast.success(`Downloaded "${track.title}"`, { id: toastId });
+    toast.success(`Download started for "${track.title}"`, { id: toastId });
     return true;
   } catch (error: any) {
     console.error("Single download error:", error);
@@ -77,6 +123,8 @@ export async function downloadMultipleTracks(
     url: string;
     ext: string;
     filename: string;
+    base64Data?: string;
+    mimeType?: string;
   }>,
   onProgress?: (current: number, total: number, currentTrackTitle: string) => void,
 ): Promise<{ succeeded: number; failed: number }> {
@@ -99,7 +147,7 @@ export async function downloadMultipleTracks(
       const info = await getAudioDownloadUrlFn({
         data: { videoId: track.id, title: track.title },
       });
-      await saveAudioFile(info.url, info.filename);
+      await saveAudioFile(info.url, info.filename, info.base64Data, info.mimeType);
       succeeded++;
     } catch (err) {
       console.error(`Failed downloading ${track.title}:`, err);
@@ -112,10 +160,18 @@ export async function downloadMultipleTracks(
     }
   }
 
-  if (failed === 0) {
-    toast.success(`Successfully downloaded all ${succeeded} songs!`, { id: batchToastId });
+  if (succeeded > 0 && failed === 0) {
+    toast.success(`Successfully downloaded all ${succeeded} songs!`, {
+      id: batchToastId,
+    });
+  } else if (succeeded > 0 && failed > 0) {
+    toast.warning(`Downloaded ${succeeded} of ${total} songs (${failed} failed).`, {
+      id: batchToastId,
+    });
   } else {
-    toast.warning(`Completed with ${succeeded} downloaded, ${failed} failed.`, { id: batchToastId });
+    toast.error(`Failed to download selected tracks. Please try again later.`, {
+      id: batchToastId,
+    });
   }
 
   return { succeeded, failed };

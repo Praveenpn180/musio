@@ -400,7 +400,7 @@ export const getAudioDownloadUrl = createServerFn({ method: "GET" })
       })
       .parse(data)
   )
-  .handler(async ({ data }): Promise<{ url: string; ext: string; filename: string }> => {
+  .handler(async ({ data }): Promise<{ url: string; ext: string; filename: string; base64Data?: string; mimeType?: string }> => {
     const cleanTitle = (data.title || "audio_track")
       .replace(/[/\\?%*:|"<>]/g, "_")
       .trim();
@@ -413,17 +413,43 @@ export const getAudioDownloadUrl = createServerFn({ method: "GET" })
       const { stdout } = await execFileAsync(
         "yt-dlp",
         ["-g", "-f", "bestaudio", `https://www.youtube.com/watch?v=${data.videoId}`],
-        { timeout: 15000 }
+        { timeout: 25000 }
       );
       const rawUrl = stdout.trim().split(/\r?\n/)[0];
       if (rawUrl && rawUrl.startsWith("http")) {
         let ext = "webm";
         if (rawUrl.includes("mime=audio%2Fmp4") || rawUrl.includes("mime=audio/m4a")) ext = "m4a";
         else if (rawUrl.includes("mime=audio%2Fwebm")) ext = "webm";
+        const mimeType = ext === "m4a" ? "audio/mp4" : ext === "webm" ? "audio/webm" : "audio/mpeg";
+
+        // Try downloading audio buffer on server to completely bypass browser CORS restrictions
+        try {
+          const fetchRes = await fetch(rawUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
+          });
+          if (fetchRes.ok) {
+            const buf = Buffer.from(await fetchRes.arrayBuffer());
+            if (buf.length > 10000) {
+              return {
+                url: rawUrl,
+                ext,
+                filename: `${cleanTitle}.${ext}`,
+                base64Data: buf.toString("base64"),
+                mimeType,
+              };
+            }
+          }
+        } catch (bufErr) {
+          console.warn("Server buffer fetch failed, returning direct URL:", bufErr);
+        }
+
         return {
           url: rawUrl,
           ext,
           filename: `${cleanTitle}.${ext}`,
+          mimeType,
         };
       }
     } catch (e) {

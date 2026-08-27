@@ -40,10 +40,30 @@ export const Route = createFileRoute("/_app/library")({
 function LibraryPage() {
   const { state, user, updatePreferredLanguages } = useLibrary();
   const { playTrack } = usePlayer();
+  const { selectionMode, toggleSelectionMode, selectAllTracks } = useSelection();
   const [q, setQ] = useState("");
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [editSelected, setEditSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const toggleLang = (id: string) => {
+    setEditSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSaveLanguages = async () => {
+    try {
+      setSaving(true);
+      await updatePreferredLanguages(editSelected);
+      toast.success("Preferences updated!");
+      setPrefsOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update preferences");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Sync selected languages when opening the modal
   useEffect(() => {

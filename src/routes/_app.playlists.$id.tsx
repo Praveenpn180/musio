@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronLeft, Play, Shuffle, Trash2, Pencil } from "lucide-react";
+import { ChevronLeft, Play, Shuffle, Trash2, Pencil, CheckSquare } from "lucide-react";
 import { Screen } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
+import { useSelection } from "@/lib/selection-context";
 
 export const Route = createFileRoute("/_app/playlists/$id")({
   head: () => ({
@@ -18,6 +19,7 @@ function PlaylistDetail() {
   const navigate = useNavigate();
   const { state, removeFromPlaylist, deletePlaylist, renamePlaylist } = useLibrary();
   const { playTrack } = usePlayer();
+  const { selectionMode, toggleSelectionMode, selectAllTracks } = useSelection();
   const playlist = state.playlists.find((p) => p.id === id);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(playlist?.name ?? "");
@@ -97,7 +99,7 @@ function PlaylistDetail() {
           {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
         </p>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <button
             disabled={tracks.length === 0}
             onClick={() => tracks.length && playTrack(tracks[0], { queue: tracks })}
@@ -116,6 +118,21 @@ function PlaylistDetail() {
           >
             <Shuffle className="h-4 w-4" />
           </button>
+          {tracks.length > 0 && (
+            <button
+              onClick={() => {
+                if (!selectionMode) {
+                  selectAllTracks(tracks);
+                } else {
+                  toggleSelectionMode();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-hover active:scale-95"
+            >
+              <CheckSquare className="h-3.5 w-3.5 text-brand" />
+              <span>{selectionMode ? "Cancel Select" : "Select Songs"}</span>
+            </button>
+          )}
           <button
             onClick={() => setEditing((v) => !v)}
             className="grid h-10 w-10 place-items-center rounded-full border border-border bg-card"

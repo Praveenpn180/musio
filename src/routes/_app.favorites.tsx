@@ -3,7 +3,8 @@ import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
-import { Heart, Play } from "lucide-react";
+import { useSelection } from "@/lib/selection-context";
+import { Heart, Play, CheckSquare } from "lucide-react";
 
 export const Route = createFileRoute("/_app/favorites")({
   head: () => ({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_app/favorites")({
 function FavoritesPage() {
   const { state } = useLibrary();
   const { playTrack } = usePlayer();
+  const { selectionMode, toggleSelectionMode, selectAllTracks } = useSelection();
   const tracks = state.favorites.map((id) => state.saved[id]).filter(Boolean);
 
   return (
@@ -41,10 +43,20 @@ function FavoritesPage() {
             >
               <Play className="h-4 w-4 fill-current" /> Play all
             </button>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Heart className="h-3.5 w-3.5 fill-brand text-brand" />
-              all yours
-            </span>
+
+            <button
+              onClick={() => {
+                if (!selectionMode) {
+                  selectAllTracks(tracks);
+                } else {
+                  toggleSelectionMode();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-hover active:scale-95"
+            >
+              <CheckSquare className="h-3.5 w-3.5 text-brand" />
+              <span>{selectionMode ? "Cancel Select" : "Select Songs"}</span>
+            </button>
           </div>
           <div className="mt-4 space-y-1 px-5">
             {tracks.map((t) => (
@@ -56,3 +68,4 @@ function FavoritesPage() {
     </Screen>
   );
 }
+

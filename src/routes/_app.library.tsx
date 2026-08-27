@@ -4,7 +4,8 @@ import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
-import { Check, Loader2, Play, Shuffle } from "lucide-react";
+import { useSelection } from "@/lib/selection-context";
+import { Check, Loader2, Play, Shuffle, CheckSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -135,6 +136,7 @@ function LibraryPage() {
         </div>
       )}
 
+      {/* Languages Preference Modal */}
       <Sheet open={prefsOpen} onOpenChange={setPrefsOpen}>
         <SheetContent side="bottom" className="mx-auto max-w-md rounded-t-[32px] border-t border-border bg-card/95 px-6 pb-8 pt-6 backdrop-blur-xl">
           <SheetHeader className="text-left">
@@ -143,49 +145,30 @@ function LibraryPage() {
               Select languages to customize your autoplay recommendations.
             </SheetDescription>
           </SheetHeader>
-
-          <div className="mt-6 space-y-4 max-h-[60vh] overflow-y-auto pr-1 no-scrollbar">
-            <div className="grid grid-cols-2 gap-2">
-              {ALL_LANGUAGES.map((lang) => {
-                const isSelected = editSelected.includes(lang.id);
-                return (
-                  <button
-                    key={lang.id}
-                    onClick={() => {
-                      setEditSelected((prev) =>
-                        prev.includes(lang.id)
-                          ? prev.filter((x) => x !== lang.id)
-                          : [...prev, lang.id]
-                      );
-                    }}
-                    className={`flex items-center justify-between rounded-full border px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-brand/40 bg-brand/5 text-brand"
-                        : "border-border bg-card/30 text-muted-foreground hover:bg-card/50"
-                    }`}
-                  >
-                    <span>{lang.name}</span>
-                    {isSelected && <Check className="h-3.5 w-3.5" />}
-                  </button>
-                );
-              })}
-            </div>
-
+          <div className="my-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {ALL_LANGUAGES.map((lang) => {
+              const selected = editSelected.includes(lang.id);
+              return (
+                <button
+                  key={lang.id}
+                  onClick={() => toggleLang(lang.id)}
+                  className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-all ${
+                    selected
+                      ? "border-brand bg-brand/10 text-brand shadow-sm"
+                      : "border-border/60 bg-surface/50 text-muted-foreground hover:bg-surface"
+                  }`}
+                >
+                  <span>{lang.name}</span>
+                  {selected && <Check className="h-3.5 w-3.5 text-brand" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-3">
             <Button
-              disabled={editSelected.length === 0 || saving}
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  await updatePreferredLanguages(editSelected);
-                  toast.success("Preferences updated successfully!");
-                  setPrefsOpen(false);
-                } catch {
-                  toast.error("Failed to update preferences.");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              className="mt-4 h-11 w-full rounded-full bg-brand text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_var(--color-brand-glow)] hover:bg-brand/90 active:scale-[0.98] cursor-pointer"
+              disabled={saving}
+              onClick={handleSaveLanguages}
+              className="w-full rounded-xl bg-brand text-brand-foreground font-semibold py-5 hover:bg-brand/90"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Save Changes"}
             </Button>
@@ -194,7 +177,7 @@ function LibraryPage() {
       </Sheet>
 
       {tracks.length > 0 && (
-        <div className="flex items-center gap-2 px-5">
+        <div className="flex flex-wrap items-center gap-2 px-5">
           <button
             onClick={() => playTrack(tracks[0], { queue: tracks })}
             className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_var(--color-brand-glow)] active:scale-95"
@@ -209,6 +192,19 @@ function LibraryPage() {
             className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold active:scale-95"
           >
             <Shuffle className="h-4 w-4" /> Shuffle
+          </button>
+          <button
+            onClick={() => {
+              if (!selectionMode) {
+                selectAllTracks(tracks);
+              } else {
+                toggleSelectionMode();
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-hover active:scale-95"
+          >
+            <CheckSquare className="h-3.5 w-3.5 text-brand" />
+            <span>{selectionMode ? "Cancel Select" : "Select Songs"}</span>
           </button>
         </div>
       )}

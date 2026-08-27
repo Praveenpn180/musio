@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { LibraryProvider, useLibrary } from "@/lib/library-store";
 import { PlayerProvider } from "@/lib/player";
+import { SelectionProvider } from "@/lib/selection-context";
+import { SelectionBar } from "@/components/player/SelectionBar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
@@ -40,16 +42,19 @@ function AppLayout() {
   return (
     <LibraryProvider>
       <AuthGuard>
-        <PlayerProvider>
-          <div className="min-h-screen">
-            <Outlet />
-          </div>
-          <MiniPlayer />
-          <BottomNav />
-          <NowPlayingSheet />
-          <LockScreen />
-        </PlayerProvider>
+        <SelectionProvider>
+          <PlayerProvider>
+            <div className="min-h-screen">
+              <Outlet />
+            </div>
+            <SelectionBar />
+            <MiniPlayer />
+            <BottomNav />
+            <NowPlayingSheet />
+            <LockScreen />
+          </PlayerProvider>
+        </SelectionProvider>
       </AuthGuard>
     </LibraryProvider>
   );
-}
+}

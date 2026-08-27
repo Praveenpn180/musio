@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search as SearchIcon, ListMusic, Heart, Clock, Play } from "lucide-react";
+import { Search as SearchIcon, ListMusic, Heart, Clock, Play, CheckSquare } from "lucide-react";
 import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
+import { useSelection } from "@/lib/selection-context";
 
 export const Route = createFileRoute("/_app/")({
   head: () => ({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_app/")({
 function Home() {
   const { state } = useLibrary();
   const { playTrack } = usePlayer();
+  const { selectionMode, toggleSelectionMode, selectAllTracks } = useSelection();
 
   const recentTracks = state.recent.map((id) => state.saved[id]).filter(Boolean);
   const savedTracks = Object.values(state.saved).slice(0, 8);
@@ -95,7 +97,24 @@ function Home() {
 
       {/* Saved tracks */}
       <section className="mt-8 px-5">
-        <SectionTitle title="From your library" link={{ to: "/library", label: "View all" }} inline />
+        <div className="flex items-center justify-between mb-3">
+          <SectionTitle title="From your library" link={{ to: "/library", label: "View all" }} inline />
+          {savedTracks.length > 0 && (
+            <button
+              onClick={() => {
+                if (!selectionMode) {
+                  selectAllTracks(savedTracks);
+                } else {
+                  toggleSelectionMode();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-card/80 active:scale-95"
+            >
+              <CheckSquare className="h-3.5 w-3.5 text-brand" />
+              <span>{selectionMode ? "Cancel" : "Select"}</span>
+            </button>
+          )}
+        </div>
         {savedTracks.length === 0 ? (
           <EmptyState
             title="Library is empty"

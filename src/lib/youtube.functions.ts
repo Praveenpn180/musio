@@ -391,3 +391,100 @@ export const getRecommendations = createServerFn({ method: "GET" })
     return rawList.filter((x) => x.id !== data.videoId);
   });
 
+export const getAudioDownloadUrl = createServerFn({ method: "GET" })
+  .inputValidator((data) =>
+    z
+      .object({
+        videoId: z.string().min(1),
+        title: z.string().optional(),
+      })
+      .parse(data)
+  )
+  .handler(async ({ data }): Promise<{ url: string; ext: string; filename: string }> => {
+    const cleanTitle = (data.title || "audio_track")
+      .replace(/[/\\?%*:|"<>]/g, "_")
+      .trim();
+
+    // 1. Primary: Try @distube/ytdl-core
+    try {
+      const ytdlModule = await import("@distube/ytdl-core");
+      const ytdl = ytdlModule.default || ytdlModule;
+      const info = await ytdl.getInfo(data.videoId);
+      const format = ytdl.chooseFormat(info.formats, { filter: "audioonly", quality: "highestaudio" });
+      if (format && format.url) {
+        let ext = "mp3";
+        if (format.mimeType?.includes("webm")) ext = "webm";
+        else if (format.mimeType?.includes("mp4") || format.mimeType?.includes("m4a")) ext = "m4a";
+        return {
+          url: format.url,
+          ext,
+          filename: `${cleanTitle}.${ext}`,
+        };
+      }
+    } catch (e) {
+      console.warn("ytdl-core fetch failed, trying fallbacks:", e);
+    }
+
+    // 2. Secondary: Try Invidious Instances
+    const invidiousInstances = [
+      "https://inv.tux.pizza",
+      "https://invidious.nerdvpn.de",
+      "https://invidious.drgns.space",
+      "https://vid.puffyan.us",
+      "https://invidious.jing.rocks",
+    ];
+
+    for (const inst of invidiousInstances) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${inst}/api/v1/videos/${data.videoId}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) continue;
+
+        const videoData = await res.json();
+        const audioStreams = videoData.adaptiveFormats?.filter((f: any) => f.type?.includes("audio"));
+        if (audioStreams && audioStreams.length > 0) {
+          audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+          const best = audioStreams[0];
+          let ext = "mp3";
+          if (best.type?.includes("webm")) ext = "webm";
+          else if (best.type?.includes("mp4") || best.type?.includes("m4a")) ext = "m4a";
+          return {
+            url: best.url,
+            ext,
+            filename: `${cleanTitle}.${ext}`,
+          };
+        }
+      } catch {}
+    }
+
+    // 3. Tertiary: Try Cobalt API
+    try {
+      const cobaltRes = await fetch("https://api.cobalt.tools/", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${data.videoId}`,
+          downloadMode: "audio",
+          audioFormat: "mp3",
+        }),
+      });
+      if (cobaltRes.ok) {
+        const cobaltData = await cobaltRes.json();
+        if (cobaltData.url) {
+          return {
+            url: cobaltData.url,
+            ext: "mp3",
+            filename: `${cleanTitle}.mp3`,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Cobalt fallback failed:", e);
+    }
+
+    throw new Error("Unable to retrieve audio stream URL for this track. Please try again later.");
+  });
+
+

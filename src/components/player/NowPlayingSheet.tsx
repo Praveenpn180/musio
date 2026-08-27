@@ -12,9 +12,11 @@ import {
   Loader2,
   Lock,
   Infinity as InfinityIcon,
+  Download,
 } from "lucide-react";
 import { usePlayer, formatTime } from "@/lib/player";
 import { useLibrary } from "@/lib/library-store";
+import { useSelection } from "@/lib/selection-context";
 import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
 import { getRecommendations, type YTTrack } from "@/lib/youtube.functions";
@@ -49,6 +51,7 @@ export function NowPlayingSheet() {
     ...useLibrary(),
     playlists: useLibrary().state.playlists,
   };
+  const { downloadSingle } = useSelection();
 
   const [tab, setTab] = useState<"player" | "queue" | "recommended">("player");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -64,10 +67,10 @@ export function NowPlayingSheet() {
     let active = true;
     setLoadingRecs(true);
     getRecsFn({ data: { videoId: current.id, title: current.title, channel: current.channel } })
-      .then((res) => {
+      .then((res: YTTrack[]) => {
         if (active) setRecommended(res);
       })
-      .catch((e) => console.error(e))
+      .catch((e: unknown) => console.error(e))
       .finally(() => {
         if (active) setLoadingRecs(false);
       });
@@ -99,20 +102,21 @@ export function NowPlayingSheet() {
       />
       <div className="absolute inset-0 -z-10 bg-background/85" aria-hidden />
 
-      <header className="flex items-center justify-between px-5 pt-[calc(env(safe-area-inset-top)+12px)] pb-3">
+      {/* header */}
+      <div className="flex items-center justify-between p-4 border-b border-border/40">
         <button
           onClick={() => setShowNowPlaying(false)}
-          className="grid h-10 w-10 place-items-center rounded-full bg-surface/70 text-foreground"
-          aria-label="Minimize"
+          className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:text-foreground"
+          aria-label="Collapse"
         >
-          <ChevronDown className="h-5 w-5" />
+          <ChevronDown className="h-6 w-6" />
         </button>
-        <div className="flex rounded-full bg-surface/50 p-1">
+        <div className="flex items-center gap-1 rounded-full bg-surface p-1 text-xs font-semibold">
           <button
             onClick={() => setTab("player")}
             className={cn(
-              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
-              tab === "player" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              "rounded-full px-3 py-1 transition-colors",
+              tab === "player" ? "bg-brand text-brand-foreground" : "text-muted-foreground",
             )}
           >
             Player
@@ -120,8 +124,8 @@ export function NowPlayingSheet() {
           <button
             onClick={() => setTab("queue")}
             className={cn(
-              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
-              tab === "queue" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              "rounded-full px-3 py-1 transition-colors",
+              tab === "queue" ? "bg-brand text-brand-foreground" : "text-muted-foreground",
             )}
           >
             Queue ({queue.length})
@@ -129,22 +133,24 @@ export function NowPlayingSheet() {
           <button
             onClick={() => setTab("recommended")}
             className={cn(
-              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer",
-              tab === "recommended" ? "bg-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              "rounded-full px-3 py-1 transition-colors",
+              tab === "recommended" ? "bg-brand text-brand-foreground" : "text-muted-foreground",
             )}
           >
-            Recommended
+            Radio
           </button>
         </div>
         <button
-          onClick={lock}
-          aria-label="Enter lock screen"
-          title="Enter lock screen"
-          className="grid h-10 w-10 place-items-center rounded-full bg-surface/70 text-foreground"
+          onClick={() => {
+            setShowNowPlaying(false);
+            lock();
+          }}
+          className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:text-foreground"
+          aria-label="Lock screen"
         >
-          <Lock className="h-4 w-4" />
+          <Lock className="h-5 w-5" />
         </button>
-      </header>
+      </div>
 
       {tab === "player" && (
         <div className="flex flex-1 flex-col px-6 pb-8 overflow-y-auto">
@@ -174,6 +180,13 @@ export function NowPlayingSheet() {
               )}
             >
               <Heart className={cn("h-5 w-5", fav && "fill-brand")} />
+            </button>
+            <button
+              onClick={() => downloadSingle(current)}
+              aria-label="Download song"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface/70 text-foreground hover:text-brand"
+            >
+              <Download className="h-5 w-5" />
             </button>
             <button
               onClick={() => setPickerOpen((v) => !v)}

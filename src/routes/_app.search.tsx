@@ -2,11 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search as SearchIcon, X, Loader2 } from "lucide-react";
+import { Search as SearchIcon, X, Loader2, CheckSquare } from "lucide-react";
 import { Screen, ScreenHeader } from "@/components/layout/Screen";
 import { TrackRow } from "@/components/player/TrackRow";
 import { searchYouTube, type YTTrack } from "@/lib/youtube.functions";
 import { usePlayer } from "@/lib/player";
+import { useSelection } from "@/lib/selection-context";
 
 export const Route = createFileRoute("/_app/search")({
   head: () => ({
@@ -23,6 +24,7 @@ function SearchPage() {
   const [results, setResults] = useState<YTTrack[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { playTrack, blockedTracks } = usePlayer();
+  const { selectionMode, toggleSelectionMode, selectAllTracks } = useSelection();
   const fn = useServerFn(searchYouTube);
   const mutation = useMutation({
     mutationFn: async (query: string) => fn({ data: { query } }),
@@ -95,17 +97,38 @@ function SearchPage() {
           </p>
         )}
         {visibleResults.length > 0 && (
-          <div className="space-y-1">
-            {visibleResults.map((t) => (
-              <TrackRow
-                key={t.id}
-                track={t}
-                onPlay={() => playTrack(t, { queue: visibleResults })}
-              />
-            ))}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Results ({visibleResults.length})
+              </span>
+              <button
+                onClick={() => {
+                  if (!selectionMode) {
+                    selectAllTracks(visibleResults);
+                  } else {
+                    toggleSelectionMode();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-surface-hover active:scale-95"
+              >
+                <CheckSquare className="h-3.5 w-3.5 text-brand" />
+                <span>{selectionMode ? "Cancel Select" : "Select Songs"}</span>
+              </button>
+            </div>
+            <div className="space-y-1">
+              {visibleResults.map((t) => (
+                <TrackRow
+                  key={t.id}
+                  track={t}
+                  onPlay={() => playTrack(t, { queue: visibleResults })}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
     </Screen>
   );
 }
+

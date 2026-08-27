@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Play, Plus, Heart, ListPlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Play, Plus, Heart, ListPlus, MoreHorizontal, Trash2, Download, CheckSquare, Square, Check } from "lucide-react";
 import type { Track } from "@/lib/library-store";
 import { useLibrary } from "@/lib/library-store";
 import { usePlayer } from "@/lib/player";
+import { useSelection } from "@/lib/selection-context";
 import { cn } from "@/lib/utils";
 
 export function TrackRow({
@@ -21,9 +22,18 @@ export function TrackRow({
   const { isFavorite, toggleFavorite, saveTrack, isSaved, removeTrack, state, addToPlaylist } =
     useLibrary();
   const { playTrack, addToQueue, current, playing } = usePlayer();
+  const {
+    selectionMode,
+    isTrackSelected,
+    toggleTrackSelection,
+    enableSelectionMode,
+    downloadSingle,
+  } = useSelection();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const fav = isFavorite(track.id);
   const isCurrent = current?.id === track.id;
+  const selected = isTrackSelected(track.id);
 
   return (
     <div
@@ -31,10 +41,35 @@ export function TrackRow({
         "group relative flex items-center gap-3 rounded-xl p-2 transition-colors",
         "hover:bg-surface-hover",
         isCurrent && "bg-surface-hover",
+        selected && "bg-brand/10 hover:bg-brand/15 border border-brand/20",
       )}
     >
+      {/* Selection Checkbox */}
+      {selectionMode ? (
+        <button
+          onClick={() => toggleTrackSelection(track)}
+          className={cn(
+            "grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition-colors",
+            selected
+              ? "border-brand bg-brand text-brand-foreground"
+              : "border-border bg-surface hover:border-brand/60",
+          )}
+          aria-label={selected ? `Deselect ${track.title}` : `Select ${track.title}`}
+        >
+          {selected && <Check className="h-4 w-4 stroke-[3]" />}
+        </button>
+      ) : null}
+
       <button
-        onClick={() => (onPlay ? onPlay() : playTrack(track))}
+        onClick={() => {
+          if (selectionMode) {
+            toggleTrackSelection(track);
+          } else if (onPlay) {
+            onPlay();
+          } else {
+            playTrack(track);
+          }
+        }}
         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface"
         aria-label={`Play ${track.title}`}
       >
@@ -54,7 +89,15 @@ export function TrackRow({
       </button>
 
       <button
-        onClick={() => (onPlay ? onPlay() : playTrack(track))}
+        onClick={() => {
+          if (selectionMode) {
+            toggleTrackSelection(track);
+          } else if (onPlay) {
+            onPlay();
+          } else {
+            playTrack(track);
+          }
+        }}
         className="min-w-0 flex-1 text-left"
       >
         <p className={cn("truncate text-sm font-semibold", isCurrent && "text-brand")}>
@@ -93,6 +136,25 @@ export function TrackRow({
               className="fixed inset-0 z-30 cursor-default"
             />
             <div className="absolute right-0 top-10 z-40 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-2xl">
+              <MenuItem
+                icon={<Download className="h-4 w-4" />}
+                label="Download song"
+                onClick={() => {
+                  setMenuOpen(false);
+                  downloadSingle(track);
+                }}
+              />
+              <MenuItem
+                icon={<CheckSquare className="h-4 w-4" />}
+                label={selected ? "Deselect song" : "Select song"}
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (!selectionMode) {
+                    enableSelectionMode();
+                  }
+                  toggleTrackSelection(track);
+                }}
+              />
               <MenuItem
                 icon={<ListPlus className="h-4 w-4" />}
                 label="Add to queue"
@@ -156,7 +218,7 @@ export function TrackRow({
         )}
       </div>
 
-      {typeof index === "number" && (
+      {typeof index === "number" && !selectionMode && (
         <span className="absolute -left-5 top-1/2 hidden -translate-y-1/2 text-[10px] font-mono text-muted-foreground md:block">
           {index + 1}
         </span>
@@ -184,3 +246,4 @@ function MenuItem({
     </button>
   );
 }
+
